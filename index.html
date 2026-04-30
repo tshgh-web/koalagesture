@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<title>Animal Gesture Game</title>
+<style>
+/* ── Reset & base ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  background: linear-gradient(145deg, #6366f1 0%, #a855f7 40%, #ec4899 80%, #f97316 100%);
+  font-family: "Nunito", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100dvh;
+  padding: clamp(8px, 2vw, 16px) clamp(8px, 2vw, 16px) clamp(12px, 3vw, 20px);
+  gap: clamp(8px, 2vw, 14px);
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* ── Twinkling stars ─────────────────────────────────────────── */
+.star {
+  position: fixed; border-radius: 50%; background: #fff;
+  animation: twinkle var(--dur, 3s) var(--delay, 0s) infinite alternate;
+  pointer-events: none; z-index: 0;
+}
+@keyframes twinkle {
+  0%  { opacity: .15; transform: scale(1); }
+  100%{ opacity: .75; transform: scale(1.4); }
+}
+
+/* ── Title ───────────────────────────────────────────────────── */
+h1 {
+  font-family: "Fredoka One", cursive;
+  color: #fff;
+  font-size: clamp(1.2rem, 4vw, 1.8rem);
+  font-weight: 400;
+  text-shadow: 0 3px 12px rgba(0,0,0,.3);
+  letter-spacing: 1px;
+  z-index: 1; position: relative;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ── Stage (camera frame) ────────────────────────────────────── */
+#stage {
+  position: relative;
+  width: min(560px, 100%);
+  /* Taller ratio so reveal content fits comfortably */
+  aspect-ratio: 4 / 3;
+  background: #111;
+  border-radius: clamp(16px, 3vw, 24px);
+  overflow: hidden;
+  box-shadow: 0 12px 50px rgba(0,0,0,.45), 0 0 0 3px rgba(255,255,255,.25);
+  z-index: 1; flex-shrink: 0;
+}
+
+#vid {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+#cv {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  transform: scaleX(-1);
+}
+
+/* ── Hint bar (top of stage) ─────────────────────────────────── */
+#hint {
+  position: absolute; top: 0; left: 0; right: 0;
+  text-align: center;
+  font-size: clamp(.75rem, 2.2vw, .92rem);
+  font-weight: 700;
+  color: #fff;
+  background: rgba(0,0,0,.35);
+  padding: 7px 12px;
+  pointer-events: none;
+  transition: opacity .4s;
+  z-index: 4;
+  line-height: 1.3;
+  backdrop-filter: blur(4px);
+}
+
+/* ── Status bar (bottom of stage) ───────────────────────────── */
+#status {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  text-align: center;
+  font-size: clamp(.7rem, 2vw, .82rem);
+  font-weight: 600;
+  color: rgba(255,255,255,.8);
+  background: rgba(0,0,0,.3);
+  padding: 6px 12px;
+  pointer-events: none;
+  z-index: 4;
+  transition: opacity .3s;
+  backdrop-filter: blur(4px);
+}
+
+/* ── Reveal overlay ──────────────────────────────────────────── */
+#reveal {
+  position: absolute; inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(4px, 1.2vw, 10px);
+  padding: clamp(10px, 2.5vw, 20px) clamp(14px, 3vw, 24px);
+  background: var(--reveal-bg, radial-gradient(ellipse at center, rgba(76,29,149,.92) 0%, rgba(20,0,60,.97) 100%));
+  opacity: 0;
+  transition: opacity .5s;
+  pointer-events: none;
+  z-index: 5;
+  overflow: hidden;
+}
+#reveal.show { opacity: 1; }
+
+/* Animal image / emoji container */
+.animal-display {
+  flex: 0 0 auto;
+  max-height: 36%;
+  display: flex; align-items: center; justify-content: center;
+}
+#kimg {
+  height: 100%;
+  max-height: clamp(80px, 20vw, 160px);
+  width: auto;
+  max-width: 55%;
+  border-radius: 14px;
+  object-fit: contain;
+  box-shadow: 0 0 30px rgba(255,200,255,.45), 0 0 0 3px rgba(255,255,255,.2);
+  animation: popIn .65s cubic-bezier(.175,.885,.32,1.275) forwards;
+}
+.emoji-img {
+  font-size: clamp(50px, 14vw, 110px);
+  line-height: 1;
+  filter: drop-shadow(0 6px 16px rgba(0,0,0,.5));
+  animation: popIn .65s cubic-bezier(.175,.885,.32,1.275) forwards;
+}
+
+@keyframes popIn {
+  0%  { transform: scale(.25) rotate(-12deg); opacity: 0; }
+  60% { transform: scale(1.1) rotate(3deg); }
+  80% { transform: scale(.96) rotate(-1deg); }
+  100%{ transform: scale(1) rotate(0); opacity: 1; }
+}
+
+#kname {
+  font-family: "Fredoka One", cursive;
+  font-size: clamp(1.6rem, 6vw, 3rem);
+  color: #fff;
+  text-shadow: 0 0 28px rgba(255,200,255,.7), 0 4px 0 rgba(0,0,0,.3);
+  animation: slideUp .45s .15s both;
+  line-height: 1;
+  flex-shrink: 0;
+}
+#kspell {
+  font-size: clamp(.6rem, 1.8vw, .95rem);
+  color: rgba(255,220,255,.85);
+  letter-spacing: clamp(4px, 1.5vw, 8px);
+  font-weight: 700;
+  animation: slideUp .45s .28s both;
+  flex-shrink: 0;
+}
+#kfact {
+  font-size: clamp(.7rem, 2vw, .88rem);
+  color: rgba(255,255,255,.95);
+  max-width: 90%;
+  text-align: center;
+  line-height: 1.55;
+  background: rgba(255,255,255,.12);
+  padding: clamp(6px,1.5vw,10px) clamp(10px,2.5vw,16px);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.22);
+  animation: slideUp .45s .42s both;
+  flex-shrink: 1;
+  /* Safety: never overflow */
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(14px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* Speech wave (inside reveal, below fact) */
+#speech-wave {
+  display: flex; align-items: center; gap: 3px;
+  opacity: 0; transition: opacity .3s;
+  flex-shrink: 0;
+}
+#speech-wave.active { opacity: 1; }
+.wb {
+  width: 4px; border-radius: 3px; background: rgba(255,255,255,.7);
+  animation: wv 1s ease-in-out infinite;
+}
+.wb:nth-child(1){ animation-delay:0s }
+.wb:nth-child(2){ animation-delay:.12s }
+.wb:nth-child(3){ animation-delay:.24s }
+.wb:nth-child(4){ animation-delay:.36s }
+.wb:nth-child(5){ animation-delay:.24s }
+.wb:nth-child(6){ animation-delay:.12s }
+.wb:nth-child(7){ animation-delay:0s }
+@keyframes wv {
+  0%,100%{ height:5px; opacity:.4 }
+  50%    { height:18px; opacity:1 }
+}
+
+/* ── Sparkles ────────────────────────────────────────────────── */
+.spark {
+  position: absolute; border-radius: 50%;
+  pointer-events: none; z-index: 6;
+  animation: burst var(--dur,.8s) ease-out forwards;
+}
+@keyframes burst {
+  0%  { transform: translate(0,0) scale(1); opacity: 1; }
+  100%{ transform: translate(var(--tx),var(--ty)) scale(0); opacity: 0; }
+}
+
+/* ── Hold ring ───────────────────────────────────────────────── */
+#ring-wrap {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none; z-index: 3;
+}
+#ring-svg {
+  width: 96px; height: 96px;
+  opacity: 0; transition: opacity .2s;
+  filter: drop-shadow(0 0 10px rgba(255,210,80,.55));
+}
+#ring-svg.show { opacity: 1; }
+.ring-bg { fill: none; stroke: rgba(255,255,255,.15); stroke-width: 7; }
+.ring-fg {
+  fill: none; stroke: url(#rg); stroke-width: 7;
+  stroke-linecap: round;
+  stroke-dasharray: 272; stroke-dashoffset: 272;
+  transition: stroke-dashoffset .08s linear;
+  transform: rotate(-90deg); transform-origin: 48px 48px;
+}
+
+/* ── Progress bar (top edge of stage) ───────────────────────── */
+#hug-bar-wrap {
+  position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  background: rgba(255,255,255,.1);
+  pointer-events: none; opacity: 0; transition: opacity .2s; z-index: 5;
+}
+#hug-bar-wrap.show { opacity: 1; }
+#hug-bar {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #f093fb, #f5576c, #f97316);
+  transition: width .08s linear; border-radius: 2px;
+}
+
+/* ── Challenge card (below stage) ───────────────────────────── */
+#challenge {
+  width: min(560px, 100%);
+  background: rgba(255,255,255,.18);
+  backdrop-filter: blur(10px);
+  border: 1.5px solid rgba(255,255,255,.32);
+  border-radius: clamp(12px, 2.5vw, 18px);
+  padding: clamp(10px, 2.5vw, 14px) clamp(14px, 3vw, 22px);
+  text-align: center;
+  z-index: 1; flex-shrink: 0;
+  box-shadow: 0 4px 20px rgba(0,0,0,.15);
+}
+#challenge-label {
+  font-family: "Fredoka One", cursive;
+  color: #ffe066;
+  font-size: clamp(.95rem, 3vw, 1.15rem);
+  margin-bottom: 3px;
+  text-shadow: 0 2px 6px rgba(0,0,0,.25);
+}
+#challenge-desc {
+  color: rgba(255,255,255,.9);
+  font-size: clamp(.78rem, 2.2vw, .9rem);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* ── Start button ────────────────────────────────────────────── */
+#startbtn {
+  padding: clamp(11px,3vw,15px) clamp(30px,8vw,48px);
+  font-size: clamp(.95rem, 3vw, 1.1rem);
+  background: linear-gradient(135deg, #fff 0%, #ffe4fc 100%);
+  color: #7c3aed;
+  border: none; border-radius: 50px;
+  cursor: pointer; font-weight: 800;
+  font-family: "Nunito", sans-serif;
+  box-shadow: 0 6px 24px rgba(0,0,0,.25), 0 0 0 3px rgba(255,255,255,.35);
+  transition: transform .15s, box-shadow .15s;
+  z-index: 1; flex-shrink: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+#startbtn:hover, #startbtn:focus { transform: translateY(-2px) scale(1.03); outline: none; }
+#startbtn:active { transform: scale(.97); }
+#startbtn:disabled { background: #888; color: #ccc; box-shadow: none; transform: none; cursor: default; }
+
+#errmsg {
+  color: #ffe0e0; font-size: .88rem;
+  text-align: center; display: none;
+  z-index: 1; font-weight: 600;
+  max-width: min(560px, 100%);
+}
+
+/* ── Animal selector dots ────────────────────────────────────── */
+#animal-dots {
+  display: flex; gap: 10px; align-items: center;
+  z-index: 1; flex-shrink: 0;
+}
+.dot {
+  width: clamp(30px,8vw,38px); height: clamp(30px,8vw,38px);
+  border-radius: 50%;
+  background: rgba(255,255,255,.2);
+  border: 2px solid rgba(255,255,255,.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: clamp(14px,4vw,20px);
+  cursor: pointer;
+  transition: transform .2s, background .2s, border-color .2s;
+  touch-action: manipulation;
+}
+.dot.active {
+  background: rgba(255,255,255,.45);
+  border-color: rgba(255,255,255,.8);
+  transform: scale(1.25);
+}
+</style>
+</head>
+<body>
+
+<h1>🐾 Animal Gesture Game</h1>
+
+<div id="stage">
+  <video id="vid" autoplay playsinline muted></video>
+  <canvas id="cv"></canvas>
+
+  <div id="hint">Loading…</div>
+
+  <div id="reveal">
+    <!-- populated by JS -->
+    <div class="animal-display" id="animal-display"></div>
+    <div id="kname"></div>
+    <div id="kspell"></div>
+    <div id="kfact"></div>
+    <div id="speech-wave">
+      <div class="wb"></div><div class="wb"></div><div class="wb"></div>
+      <div class="wb"></div><div class="wb"></div><div class="wb"></div>
+      <div class="wb"></div>
+    </div>
+  </div>
+
+  <div id="ring-wrap">
+    <svg id="ring-svg" viewBox="0 0 96 96">
+      <defs>
+        <linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" style="stop-color:#f093fb"/>
+          <stop offset="50%" style="stop-color:#f5576c"/>
+          <stop offset="100%" style="stop-color:#ffe066"/>
+        </linearGradient>
+      </defs>
+      <circle class="ring-bg" cx="48" cy="48" r="43"/>
+      <circle class="ring-fg" id="ring-fg" cx="48" cy="48" r="43"/>
+    </svg>
+  </div>
+
+  <div id="hug-bar-wrap"><div id="hug-bar"></div></div>
+  <div id="status">Tap Start to begin!</div>
+</div>
+
+<button id="startbtn">▶ Start Camera</button>
+<div id="errmsg"></div>
+
+<div id="animal-dots"></div>
+
+<div id="challenge">
+  <div id="challenge-label"></div>
+  <div id="challenge-desc"></div>
+</div>
+
+<script>
+// ── Stars ────────────────────────────────────────────────────────────────────
+(function() {
+  for (let i = 0; i < 35; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const sz = Math.random() * 4 + 1.5;
+    s.style.cssText = `width:${sz}px;height:${sz}px;top:${Math.random()*100}vh;left:${Math.random()*100}vw;--dur:${2+Math.random()*3}s;--delay:${Math.random()*3}s`;
+    document.body.appendChild(s);
+  }
+})();
+
+// ── Animal data ───────────────────────────────────────────────────────────────
+const ANIMALS = [
+  {
+    id: 'koala', emoji: '🐨',
+    name: 'KOALA', spell: 'K · O · A · L · A',
+    hint: '🤗 Cross both arms over your chest for a koala hug!',
+    gesture: 'HUG',
+    color1: 'rgba(76,29,149,.93)', color2: 'rgba(20,0,60,.97)',
+    nameGlow: 'rgba(200,150,255,.7)',
+    facts: [
+      "Koalas sleep up to 22 hours a day to digest tough eucalyptus leaves!",
+      "A koala's fingerprints are so similar to humans that even detectives can't tell them apart!",
+      "Baby koalas, called joeys, are born the size of a jellybean!",
+      "Koalas hug tree trunks to cool down — the bark can be 7°C cooler than the air!",
+      "Koalas have two thumbs on each front paw — perfect for gripping branches!"
+    ]
+  },
+  {
+    id: 'lion', emoji: '🦁',
+    name: 'LION', spell: 'L · I · O · N',
+    hint: '🦁 Spread both hands wide open and ROAR!',
+    gesture: 'ROAR',
+    color1: 'rgba(120,53,15,.93)', color2: 'rgba(60,20,0,.97)',
+    nameGlow: 'rgba(255,200,80,.7)',
+    facts: [
+      "A lion's roar is so loud it can be heard from 8 kilometres away!",
+      "Lions are the only cats that live in groups called prides!",
+      "A lion can sleep up to 20 hours a day — even more than a koala!",
+      "Baby lions are called cubs and are born with spots that fade as they grow!",
+      "Lions are the second-largest wild cats in the world, after tigers!"
+    ]
+  },
+  {
+    id: 'bunny', emoji: '🐰',
+    name: 'BUNNY', spell: 'B · U · N · N · Y',
+    hint: '🐰 Point both index fingers up like bunny ears!',
+    gesture: 'EARS',
+    color1: 'rgba(131,24,67,.93)', color2: 'rgba(60,0,30,.97)',
+    nameGlow: 'rgba(255,150,200,.7)',
+    facts: [
+      "Bunnies can jump up to 90cm high and nearly 3 metres far!",
+      "A happy bunny will do a twisting jump called a binky!",
+      "Bunnies have nearly 360° vision — they can see almost all the way around!",
+      "Baby rabbits are called kittens or kits!",
+      "Bunnies have 28 teeth and they never stop growing!"
+    ]
+  },
+  {
+    id: 'elephant', emoji: '🐘',
+    name: 'ELEPHANT', spell: 'E · L · E · P · H · A · N · T',
+    hint: '🐘 Raise BOTH arms up high like a big elephant trumpet!',
+    gesture: 'TRUNK',
+    color1: 'rgba(31,41,55,.93)', color2: 'rgba(10,15,25,.97)',
+    nameGlow: 'rgba(160,200,160,.7)',
+    facts: [
+      "An elephant's trunk has over 40,000 muscles — humans have only about 600 in their whole body!",
+      "Elephants are the only animals that can't jump!",
+      "Baby elephants suck their trunks for comfort, just like human babies suck their thumbs!",
+      "Elephants greet each other by touching trunks — like a handshake or a hug!",
+      "An elephant can hear another elephant's call from 10 kilometres away!"
+    ]
+  }
+];
+
+let factIndexes = ANIMALS.map(() => 0);
+function getNextFact(animalIdx) {
+  const a = ANIMALS[animalIdx];
+  const i = factIndexes[animalIdx]++ % a.facts.length;
+  return a.facts[i];
+}
+
+// ── Animal state ──────────────────────────────────────────────────────────────
+let currentAnimal = 0;
+function setAnimal(idx) {
+  currentAnimal = idx;
+  const a = ANIMALS[idx];
+  document.getElementById('hint').textContent = a.hint;
+  document.getElementById('challenge-label').textContent = `Find the ${a.emoji || '🐨'} ${a.name}!`;
+  document.getElementById('challenge-desc').textContent = a.hint;
+  // Update reveal background
+  document.getElementById('reveal').style.setProperty('--reveal-bg',
+    `radial-gradient(ellipse at center, ${a.color1} 0%, ${a.color2} 100%)`);
+  // Update dots
+  document.querySelectorAll('.dot').forEach((d,i) => d.classList.toggle('active', i === idx));
+}
+
+// ── Speech ────────────────────────────────────────────────────────────────────
+let voices = [];
+function loadVoices() { voices = speechSynthesis.getVoices(); }
+speechSynthesis.addEventListener('voiceschanged', loadVoices);
+loadVoices();
+
+function pickVoice() {
+  const pref = [
+    v => v.lang === 'en-GB' && /female|woman|kate|serena|emily|martha|fiona|moira/i.test(v.name),
+    v => v.lang === 'en-GB',
+    v => v.lang.startsWith('en') && /female|woman|kate|serena|emily|samantha/i.test(v.name),
+    v => v.lang.startsWith('en')
+  ];
+  for (const fn of pref) { const v = voices.find(fn); if (v) return v; }
+  return null;
+}
+
+function utter(text, rate=0.78, pitch=1.08) {
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = rate; u.pitch = pitch; u.volume = 1;
+  const v = pickVoice(); if (v) u.voice = v;
+  return u;
+}
+
+function speakAnimal(animal, fact) {
+  return new Promise(resolve => {
+    speechSynthesis.cancel();
+    const spelled = animal.spell.replace(/·/g, '...').replace(/\s+/g, ' ');
+    const seq = [
+      utter(animal.name + '!', 0.82, 1.22),
+      utter(spelled, 0.70, 1.38),
+      utter(animal.name + '!', 0.84, 1.25),
+      utter(fact, 0.74, 1.02)
+    ];
+    let i = 0;
+    function next() {
+      if (i >= seq.length) { resolve(); return; }
+      const u = seq[i++];
+      u.onend = next; u.onerror = next;
+      speechSynthesis.speak(u);
+    }
+    setTimeout(next, 350);
+  });
+}
+
+// ── Sparkles ──────────────────────────────────────────────────────────────────
+function spawnSparks() {
+  const stage = document.getElementById('stage');
+  const colors = ['#ffe066','#f093fb','#4ade80','#60a5fa','#fb923c','#f472b6','#a78bfa'];
+  for (let i = 0; i < 18; i++) {
+    const sp = document.createElement('div');
+    sp.className = 'spark';
+    const angle = (i / 18) * Math.PI * 2;
+    const dist = 50 + Math.random() * 90;
+    const sz = 5 + Math.random() * 8;
+    sp.style.cssText = `width:${sz}px;height:${sz}px;left:50%;top:40%;background:${colors[i%colors.length]};--tx:${Math.cos(angle)*dist}px;--ty:${Math.sin(angle)*dist}px;--dur:${0.5+Math.random()*0.7}s`;
+    stage.appendChild(sp);
+    setTimeout(() => sp.remove(), 1300);
+  }
+}
+
+// ── Gesture helpers ───────────────────────────────────────────────────────────
+function fingerExtended(h, tip, pip) {
+  return h[tip].y < h[pip].y - 0.018;
+}
+function handOpen(h) {
+  return [[8,6],[12,10],[16,14],[20,18]].every(([t,p]) => fingerExtended(h,t,p));
+}
+function onlyIndex(h) {
+  return fingerExtended(h,8,6) &&
+    !fingerExtended(h,12,10) &&
+    !fingerExtended(h,16,14) &&
+    !fingerExtended(h,20,18);
+}
+
+// ── Wrist history ─────────────────────────────────────────────────────────────
+const HISTORY = 6;
+let wristHistory = [];
+
+function pushWrists(hands) {
+  if (hands.length < 2) { wristHistory = []; return; }
+  const sorted = [...hands].sort((a,b) => a[0].x - b[0].x);
+  const L = sorted[0], R = sorted[sorted.length-1];
+  wristHistory.push({
+    lx: L[0].x, ly: L[0].y,
+    rx: R[0].x, ry: R[0].y,
+    crossed: R[0].x < L[0].x + 0.06,
+    lOpen: handOpen(L), rOpen: handOpen(R),
+    lIdx: onlyIndex(L), rIdx: onlyIndex(R),
+    handCount: hands.length
+  });
+  if (wristHistory.length > HISTORY) wristHistory.shift();
+}
+
+function checkGesture(gesture) {
+  if (wristHistory.length < 3) return false;
+  const recent = wristHistory.slice(-3);
+  return recent.every(f => {
+    if (f.handCount < 2) return false;
+    const dist  = Math.abs(f.rx - f.lx);
+    const avgY  = (f.ly + f.ry) / 2;
+    const highY = Math.min(f.ly, f.ry); // the higher hand's y
+    const lowY  = Math.max(f.ly, f.ry); // the lower hand's y
+
+    switch (gesture) {
+      case 'HUG':
+        // Multi-person: 3+ hands, OR self-hug: wrists close/crossed at body level
+        if (f.handCount >= 3) return true;
+        return (dist < 0.38 || f.crossed) && avgY > 0.18 && avgY < 0.96;
+
+      case 'ROAR':
+        // Both hands open, held HIGH (avgY < 0.65), spread apart
+        return f.lOpen && f.rOpen && dist > 0.38 && avgY < 0.65;
+
+      case 'EARS':
+        // Both index-only, hands raised (avgY < 0.55)
+        return f.lIdx && f.rIdx && avgY < 0.58;
+
+      case 'WINGS':
+        // Both hands open, held LOW (avgY > 0.52), spread wide
+        return f.lOpen && f.rOpen && dist > 0.35 && avgY > 0.50;
+
+      case 'TRUNK':
+        // Both hands raised high (both wrists in upper half of frame)
+        return f.lOpen && f.rOpen && highY < 0.45 && avgY < 0.50;
+
+      default: return false;
+    }
+  });
+}
+
+// ── State machine ─────────────────────────────────────────────────────────────
+let gestureStart = null, showing = false, cooldown = false;
+const HOLD_MS = 650;
+
+function onResults(results) {
+  const cv  = document.getElementById('cv');
+  const vid = document.getElementById('vid');
+  const ctx = cv.getContext('2d');
+  cv.width  = vid.videoWidth  || 640;
+  cv.height = vid.videoHeight || 480;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+
+  const hands = results.multiHandLandmarks || [];
+  for (const lm of hands) {
+    drawConnectors(ctx, lm, HAND_CONNECTIONS, {color:'rgba(255,220,255,.3)', lineWidth:2});
+    drawLandmarks(ctx, lm, {color:'rgba(255,255,255,.8)', lineWidth:1, radius:3});
+  }
+
+  if (showing || cooldown) return;
+
+  pushWrists(hands);
+  const animal  = ANIMALS[currentAnimal];
+  const isMatch = checkGesture(animal.gesture);
+
+  const ring    = document.getElementById('ring-svg');
+  const ringFg  = document.getElementById('ring-fg');
+  const hugWrap = document.getElementById('hug-bar-wrap');
+  const hugBar  = document.getElementById('hug-bar');
+  const CIRC    = 272;
+
+  if (isMatch) {
+    if (!gestureStart) gestureStart = Date.now();
+    const pct = Math.min(1, (Date.now() - gestureStart) / HOLD_MS);
+    ring.classList.add('show');
+    hugWrap.classList.add('show');
+    ringFg.style.strokeDashoffset = CIRC * (1 - pct);
+    hugBar.style.width = (pct * 100) + '%';
+    document.getElementById('status').textContent = '✨ Great! Hold it a moment…';
+    if (pct >= 1) triggerAnimal();
+  } else {
+    gestureStart = null;
+    ring.classList.remove('show');
+    hugWrap.classList.remove('show');
+    ringFg.style.strokeDashoffset = CIRC;
+    hugBar.style.width = '0%';
+    const h = hands.length;
+    document.getElementById('status').textContent =
+      h >= 2 ? 'Hands seen! Try the gesture!' :
+      h === 1 ? 'One hand — show both hands!' :
+                'No hands seen — come closer!';
+  }
+}
+
+async function triggerAnimal() {
+  if (showing) return;
+  showing = true;
+  wristHistory = [];
+  gestureStart = null;
+
+  const idx    = currentAnimal;
+  const animal = ANIMALS[idx];
+  const fact   = getNextFact(idx);
+
+  // Populate reveal
+  const disp = document.getElementById('animal-display');
+  disp.innerHTML = '';
+  const em = document.createElement('div');
+  em.className = 'emoji-img';
+  em.textContent = animal.emoji;
+  disp.appendChild(em);
+
+  document.getElementById('kname').textContent  = animal.name;
+  document.getElementById('kname').style.textShadow = `0 0 28px ${animal.nameGlow}, 0 4px 0 rgba(0,0,0,.3)`;
+  document.getElementById('kspell').textContent = animal.spell;
+  document.getElementById('kfact').textContent  = fact;
+
+  // Show reveal, hide overlapping UI
+  document.getElementById('reveal').classList.add('show');
+  document.getElementById('hint').style.opacity   = '0';
+  document.getElementById('status').style.opacity = '0';
+  document.getElementById('ring-svg').classList.remove('show');
+  document.getElementById('hug-bar-wrap').classList.remove('show');
+
+  spawnSparks();
+
+  const wave = document.getElementById('speech-wave');
+  wave.classList.add('active');
+
+  // Wait for speech AND minimum display time
+  await Promise.all([
+    speakAnimal(animal, fact),
+    new Promise(r => setTimeout(r, 3500))
+  ]);
+
+  // Pause after speech ends before hiding
+  await new Promise(r => setTimeout(r, 900));
+
+  wave.classList.remove('active');
+  document.getElementById('reveal').classList.remove('show');
+  document.getElementById('hint').style.opacity   = '1';
+  document.getElementById('status').style.opacity = '1';
+  showing  = false;
+  cooldown = true;
+
+  // Advance to next animal after cooldown
+  setTimeout(() => {
+    cooldown = false;
+    wristHistory = [];
+    // Pick next animal (cycle or random)
+    const next = (currentAnimal + 1) % ANIMALS.length;
+    setAnimal(next);
+  }, 1200);
+}
+
+// ── Build dots ────────────────────────────────────────────────────────────────
+(function buildDots() {
+  const wrap = document.getElementById('animal-dots');
+  ANIMALS.forEach((a, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot';
+    d.title = a.name;
+    d.textContent = a.emoji || '🐨';
+    d.addEventListener('click', () => { if (!showing && !cooldown) setAnimal(i); });
+    wrap.appendChild(d);
+  });
+  setAnimal(0);
+})();
+
+// ── Camera bootstrap ──────────────────────────────────────────────────────────
+document.getElementById('startbtn').addEventListener('click', async () => {
+  const btn = document.getElementById('startbtn');
+  btn.disabled = true; btn.textContent = 'Starting…';
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: {ideal:640}, height: {ideal:480} }
+    });
+  } catch(e) {
+    const err = document.getElementById('errmsg');
+    err.style.display = 'block';
+    err.textContent = '⚠ Camera access denied — please allow camera and reload.';
+    btn.disabled = false; btn.textContent = '▶ Start Camera';
+    return;
+  }
+
+  const vid = document.getElementById('vid');
+  vid.srcObject = stream;
+  await new Promise(r => vid.onloadedmetadata = r);
+  await vid.play();
+  btn.style.display = 'none';
+
+  document.getElementById('status').textContent = 'Loading hand detector…';
+
+  await Promise.all([
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js'),
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js'),
+  ]);
+
+  const handsModel = new Hands({
+    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`
+  });
+  handsModel.setOptions({ maxNumHands: 4, modelComplexity: 1, minDetectionConfidence: 0.60, minTrackingConfidence: 0.55 });
+  handsModel.onResults(onResults);
+
+  document.getElementById('status').textContent = 'Hands ready! Try the gesture!';
+
+  async function pump() {
+    if (vid.readyState >= 2) await handsModel.send({image: vid});
+    requestAnimationFrame(pump);
+  }
+  pump();
+});
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+</script>
+</body>
+</html>
